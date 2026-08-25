@@ -1,31 +1,31 @@
-# Transformer from Scratch: PyTorch Implementation of "Attention Is All You Need"
+# Transformer from Scratch: Complete PyTorch Guide & Implementation
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![PyTorch 2.x](https://img.shields.io/badge/PyTorch-2.x-ee4c2c.svg)](https://pytorch.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Code Style: Black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-A modular, zero-abstraction implementation of the Transformer sequence-to-sequence model built entirely from scratch in PyTorch, strictly following the foundational paper **["Attention Is All You Need" (Vaswani et al., NIPS 2017)](https://arxiv.org/abs/1706.03762)**.
+An end-to-end, zero-abstraction implementation of the Transformer sequence-to-sequence model built entirely from scratch in PyTorch, strictly following the foundational paper **["Attention Is All You Need" (Vaswani et al., NIPS 2017)](https://arxiv.org/abs/1706.03762)**.
 
-This repository intentionally avoids high-level wrapper libraries (such as `torch.nn.Transformer` or Hugging Face `transformers`) to expose the low-level mathematical primitives, tensor transformations, masking mechanisms, and optimization mechanics behind modern Transformer architectures.
+This repository avoids high-level wrapper abstractions (such as `torch.nn.Transformer` or Hugging Face `transformers`) to expose the low-level mathematical primitives, tensor transformations, masking mechanisms, decoding algorithms, and optimization mechanics behind modern Transformer architectures.
 
 ---
 
 ## 📋 Table of Contents
 
 - [Architectural Overview](#-architectural-overview)
-- [Key Features & Innovations](#-key-features--innovations)
 - [Mathematical Mechanics](#-mathematical-mechanics)
 - [Repository Structure](#-repository-structure)
 - [Installation & Setup](#-installation--setup)
-- [Quick Start](#-quick-start)
-  - [1. Data Preparation & Tokenization](#1-data-preparation--tokenization)
-  - [2. Training the Model](#2-training-the-model)
-  - [3. Interactive Generation & Beam Search](#3-interactive-generation--beam-search)
-  - [4. Attention Map Visualization](#4-attention-map-visualization)
+- [Complete Usage Guide](#-complete-usage-guide)
+  - [1. Subword Tokenizer Training](#1-subword-tokenizer-training)
+  - [2. Model Training & Optimization](#2-model-training--optimization)
+  - [3. Single-Sentence Generation (`generate.py`)](#3-single-sentence-generation-generatepy)
+  - [4. Interactive CLI Evaluation (`scripts/evaluate.py`)](#4-interactive-cli-evaluation-scriptsevaluatepy)
+  - [5. Visualizing Attention Heatmaps](#5-visualizing-attention-heatmaps)
 - [Hyperparameters & Configuration](#-hyperparameters--configuration)
-- [Experimental Benchmarks & BLEU Results](#-experimental-benchmarks--bleu-results)
-- [Testing & Validation](#-testing--validation)
+- [Automated Testing (`pytest`)](#-automated-testing-pytest)
+- [Module Code Blueprint](#-module-code-blueprint)
 - [References & Citation](#-references--citation)
 - [License](#-license)
 
@@ -33,7 +33,7 @@ This repository intentionally avoids high-level wrapper libraries (such as `torc
 
 ## 🏛️ Architectural Overview
 
-The model implements an **Encoder-Decoder Architecture** designed for autoregressive sequence-to-sequence tasks (e.g., Neural Machine Translation).
+The model implements a full **Encoder-Decoder Architecture** designed for autoregressive sequence-to-sequence tasks (e.g., Neural Machine Translation).
 
 ```
                  [ Output Target Sequence ]
@@ -67,51 +67,29 @@ The model implements an **Encoder-Decoder Architecture** designed for autoregres
 
 ---
 
-## ✨ Key Features & Innovations
-
-- **Zero-Abstraction Implementation:** All layers—including Scaled Dot-Product Attention, Multi-Head Attention, Sinusoidal Positional Encoding, and Layer Normalization—are built using primitive `torch.Tensor` operations (`torch.einsum`, `torch.matmul`).
-- **Pre-Layer Normalization (Pre-LN):** Implements modern Pre-LN residual connections ($x + 	ext{SubLayer}(	ext{LayerNorm}(x))$) rather than post-LN, providing significantly greater stability and eliminating the need for delicate warmups during deep training runs.
-- **Flexible Masking System:** Robust construction of both padded source/target masks and causal look-ahead lower-triangular masks to guarantee strict autoregressive properties in decoder layers.
-- **Advanced Decoding Engines:** Supports both **Greedy Search** and **Beam Search** with customizable beam width ($k$) and length normalization ($lpha$).
-- **Noam Optimizer Scheduler:** Exact implementation of the inverse square-root learning rate scheduler with linear warmup steps as specified in Section 5.3 of the paper.
-- **Interpretability & Heatmap Visualizations:** Built-in hooks to extract and plot multi-head self-attention and cross-attention weight matrices for full interpretability.
-
----
-
 ## 🧮 Mathematical Mechanics
 
 ### 1. Scaled Dot-Product Attention
-
 Calculated across Query ($Q$), Key ($K$), and Value ($V$) projections with scaling factor $\sqrt{d_k}$ to prevent gradient vanishing in the softmax function at high dimension scales:
 
-$$	ext{Attention}(Q, K, V) = 	ext{softmax}\left( rac{Q K^T}{\sqrt{d_k}} + M 
-ight) V$$
+$$\text{Attention}(Q, K, V) = \text{softmax}\left( \frac{Q K^T}{\sqrt{d_k}} + M \right) V$$
 
 *where $M$ is the dynamic masking tensor ($-\infty$ for masked positions, $0$ otherwise).*
 
 ### 2. Multi-Head Attention (MHA)
+Splits $d_{\text{model}}$ dimensional vectors across $h$ parallel attention heads:
 
-Splits $d_{	ext{model}}$ dimensional vectors across $h$ parallel attention heads:
+$$\text{MultiHead}(Q, K, V) = \text{Concat}(\text{head}_1, \dots, \text{head}_h) W^O$$
 
-$$	ext{MultiHead}(Q, K, V) = 	ext{Concat}(	ext{head}_1, \dots, 	ext{head}_h) W^O$$
-
-$$	ext{where } 	ext{head}_i = 	ext{Attention}(Q W_i^Q, K W_i^K, V W_i^V)$$
+$$\text{where } \text{head}_i = \text{Attention}(Q W_i^Q, K W_i^K, V W_i^V)$$
 
 ### 3. Sinusoidal Positional Encoding
-
 Injects spatial ordering directly into sequence embeddings without adding learnable parameters:
 
-$$PE_{(pos, 2i)} = \sin\left(rac{pos}{10000^{2i / d_{	ext{model}}}}
-ight)$$
-
-$$PE_{(pos, 2i+1)} = \cos\left(rac{pos}{10000^{2i / d_{	ext{model}}}}
-ight)$$
+$$PE_{(pos, 2i)} = \sin\left(\frac{pos}{10000^{2i / d_{\text{model}}}}\right), \quad PE_{(pos, 2i+1)} = \cos\left(\frac{pos}{10000^{2i / d_{\text{model}}}}\right)$$
 
 ### 4. Position-Wise Feed-Forward Network (FFN)
-
-Consists of two linear transformations with a ReLU/GELU activation in between:
-
-$$	ext{FFN}(x) = \max(0, x W_1 + b_1) W_2 + b_2$$
+$$\text{FFN}(x) = \max(0, x W_1 + b_1) W_2 + b_2$$
 
 ---
 
@@ -123,147 +101,206 @@ transformer-from-scratch/
 │   └── default_config.yaml       # Hyperparameter & path configurations
 ├── data/
 │   ├── dataset.py                # PyTorch Dataset & DataLoader with dynamic masking
-│   └── tokenizer.py              # BPE / WordPiece Subword Tokenizer pipeline
+│   └── tokenizer.py              # BPE Subword Tokenizer pipeline
 ├── modules/
 │   ├── attention.py              # Scaled Dot-Product & Multi-Head Attention
 │   ├── embeddings.py             # Token Embedding & Sinusoidal Positional Encoding
 │   ├── feed_forward.py           # Position-wise Feed-Forward Networks
-│   └── layer_norm.py             # Custom Layer Normalization (Pre-LN & Post-LN)
+│   └── layer_norm.py             # Custom Layer Normalization (Pre-LN)
 ├── models/
 │   ├── encoder.py                # Encoder Layer & Encoder Stack
 │   ├── decoder.py                # Decoder Layer & Decoder Stack
 │   └── transformer.py            # End-to-End Seq2Seq Transformer model
 ├── utils/
 │   ├── decoding.py               # Greedy Search & Beam Search inference algorithms
-│   ├── metrics.py                # BLEU score computing engine via SacreBLEU
 │   ├── scheduler.py              # Noam Learning Rate Scheduler
-│   └── visualization.py          # Multi-Head Attention Heatmap Plotting utilities
+│   └── visualization.py          # Multi-Head Attention Heatmap utilities
 ├── scripts/
 │   ├── train.py                  # Main training execution pipeline
-│   └── evaluate.py               # Test evaluation & inference script
+│   └── evaluate.py               # Interactive CLI translation & evaluation script
 ├── tests/
 │   └── test_modules.py           # Comprehensive PyTorch unit testing suite
+├── generate.py                   # Single-sentence generation CLI tool
 ├── requirements.txt              # Core dependencies
+├── .gitignore                    # Version control ignore rules
 ├── LICENSE                       # MIT License
-└── README.md                     # Project documentation
+└── README.md                     # Documentation
 ```
 
 ---
 
 ## 💻 Installation & Setup
 
-### Requirements
-- Python $\ge$ 3.10
-- PyTorch $\ge$ 2.0.0
-- CUDA capable GPU (Recommended for training)
-
-### Setup Virtual Environment
-
+### 1. Clone & Navigate
 ```bash
-# Clone repository
 git clone https://github.com/yourusername/transformer-from-scratch.git
 cd transformer-from-scratch
+```
 
-# Create and activate virtual environment
+### 2. Environment Setup
+```bash
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
 pip install -r requirements.txt
 ```
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Complete Usage Guide
 
-### 1. Data Preparation & Tokenization
-Train a Byte-Pair Encoding (BPE) subword tokenizer on source and target corpora:
-
+### 1. Subword Tokenizer Training
+Train Byte-Pair Encoding (BPE) subword tokenizers for source and target languages:
 ```bash
-python data/tokenizer.py   --src_data data/raw/train.en   --tgt_data data/raw/train.de   --vocab_size 32000   --save_dir checkpoints/tokenizer/
+python data/tokenizer.py \
+  --src_data data/raw/train.en \
+  --tgt_data data/raw/train.de \
+  --vocab_size 32000 \
+  --save_dir checkpoints/
 ```
 
-### 2. Training the Model
-Train the Transformer architecture using custom hyperparameter specifications:
-
+### 2. Model Training & Optimization
+Train the model using mixed precision and Noam warmup scheduling:
 ```bash
 python scripts/train.py --config config/default_config.yaml
 ```
 
-*Example console output during training:*
-```text
-Epoch 01/30 | Step 01000/12500 | Loss: 4.8214 | PPL: 124.14 | LR: 0.00012 | Elapsed: 02m 14s
-Epoch 01/30 | Step 02000/12500 | Loss: 3.6541 | PPL: 38.63   | LR: 0.00028 | Elapsed: 04m 28s
-Epoch 01/30 | Step 03000/12500 | Loss: 2.9102 | PPL: 18.36   | LR: 0.00045 | Elapsed: 06m 41s
-...
-```
-
-### 3. Interactive Generation & Beam Search
-Translate custom source text using Beam Search decoding:
-
+### 3. Single-Sentence Generation (`generate.py`)
+Translate an input sentence using Beam Search ($k=5$):
 ```bash
-python scripts/evaluate.py   --checkpoint checkpoints/best_model.pt   --mode interactive   --beam_size 5   --length_penalty 0.6
+python generate.py \
+  --text "The black cat sat on the mat." \
+  --checkpoint checkpoints/best_model.pt \
+  --src_tok checkpoints/src_tok.json \
+  --tgt_tok checkpoints/tgt_tok.json \
+  --beam_size 5
 ```
 
-```text
-Input (EN)  : The black cat sat on the mat.
-Output (DE) : Die schwarze Katze saß auf der Matte.
-```
-
-### 4. Attention Map Visualization
-Generate heatmaps of multi-head self-attention and cross-attention maps for interpretability:
-
+### 4. Interactive CLI Evaluation (`scripts/evaluate.py`)
+Launch an interactive session to evaluate inputs in real-time:
 ```bash
-python scripts/evaluate.py   --checkpoint checkpoints/best_model.pt   --visualize_attention   --input_text "The quick brown fox jumps over the lazy dog."   --output_path figures/attention_map.png
+python scripts/evaluate.py \
+  --checkpoint checkpoints/best_model.pt \
+  --src_tok checkpoints/src_tok.json \
+  --tgt_tok checkpoints/tgt_tok.json \
+  --beam_size 5
+```
+
+### 5. Visualizing Attention Heatmaps
+Extract and render attention weight matrices across all heads:
+```bash
+python scripts/evaluate.py \
+  --checkpoint checkpoints/best_model.pt \
+  --src_tok checkpoints/src_tok.json \
+  --tgt_tok checkpoints/tgt_tok.json \
+  --visualize
 ```
 
 ---
 
 ## ⚙️ Hyperparameters & Configuration
 
-Configurations are governed via `config/default_config.yaml`. Default values closely follow the **Transformer-Base** configuration from the paper:
+Default settings in `config/default_config.yaml` follow the **Transformer-Base** specification:
 
 | Hyperparameter | Paper Baseline | Our Config | Description |
 | :--- | :---: | :---: | :--- |
 | **Encoder Layers ($N$)** | 6 | 6 | Number of stacked encoder layers |
 | **Decoder Layers ($N$)** | 6 | 6 | Number of stacked decoder layers |
-| **Model Dimension ($d_{	ext{model}}$)** | 512 | 512 | Hidden representation dimensionality |
+| **Model Dimension ($d_{\text{model}}$)** | 512 | 512 | Hidden representation dimensionality |
 | **Feed-Forward Dimension ($d_{ff}$)** | 2048 | 2048 | Inner dimension of position-wise FFN |
 | **Attention Heads ($h$)** | 8 | 8 | Number of parallel attention heads |
-| **Head Dimension ($d_k = d_v$)** | 64 | 64 | Dimension per attention head ($d_{	ext{model}} / h$) |
+| **Head Dimension ($d_k = d_v$)** | 64 | 64 | Dimension per attention head ($d_{\text{model}} / h$) |
 | **Dropout ($P_{drop}$)** | 0.1 | 0.1 | Residual and attention dropout probability |
 | **Warmup Steps** | 4000 | 4000 | Linear warmup steps for Noam scheduler |
 | **Label Smoothing ($\epsilon$)** | 0.1 | 0.1 | Cross-entropy target smoothing factor |
 
 ---
 
-## 📊 Experimental Benchmarks & BLEU Results
+## 🧪 Automated Testing (`pytest`)
 
-Evaluated on the **Multi30k English-to-German** dataset:
-
-| Model Variant | Beam Width ($k$) | BLEU-4 Score | Loss (Cross-Entropy) | Perplexity |
-| :--- | :---: | :---: | :---: | :---: |
-| Transformer-Base (Greedy) | 1 | 34.2 | 1.84 | 6.29 |
-| **Transformer-Base (Beam Search)** | **5** | **37.8** | **1.62** | **5.05** |
-| Transformer-Base (Beam + Length Norm) | 5 ($lpha=0.6$) | **38.4** | **1.58** | **4.85** |
-
-*Note: Models were trained on a single NVIDIA A100 GPU for 30 epochs with mixed-precision FP16 (`torch.cuda.amp`).*
-
----
-
-## 🧪 Testing & Validation
-
-Run unit tests covering shapes, masking logic, gradient propagation, and numerical precision:
-
+Verify tensor operations, masking logic, and shape propagation:
 ```bash
 pytest tests/ -v
 ```
 
 ---
 
-## 📚 References & Citation
+## 🧩 Module Code Blueprint
 
-If you use or reference this codebase in your academic research or projects, please cite the original foundational paper:
+### Core Attention Layer (`modules/attention.py`)
+```python
+import math
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class ScaledDotProductAttention(nn.Module):
+    def __init__(self, dropout: float = 0.1):
+        super().__init__()
+        self.dropout = nn.Dropout(p=dropout)
+
+    def forward(self, query, key, value, mask=None):
+        d_k = query.size(-1)
+        scores = torch.matmul(query, key.transpose(-2, -1)) / math.sqrt(d_k)
+        if mask is not None:
+            scores = scores.masked_fill(mask == 0, -1e9)
+        attn_weights = F.softmax(scores, dim=-1)
+        attn_weights = self.dropout(attn_weights)
+        return torch.matmul(attn_weights, value), attn_weights
+
+class MultiHeadAttention(nn.Module):
+    def __init__(self, d_model=512, num_heads=8, dropout=0.1):
+        super().__init__()
+        self.d_model = d_model
+        self.num_heads = num_heads
+        self.d_k = d_model // num_heads
+
+        self.w_q = nn.Linear(d_model, d_model, bias=False)
+        self.w_k = nn.Linear(d_model, d_model, bias=False)
+        self.w_v = nn.Linear(d_model, d_model, bias=False)
+        self.w_o = nn.Linear(d_model, d_model, bias=False)
+        self.attention = ScaledDotProductAttention(dropout=dropout)
+
+    def forward(self, q, k, v, mask=None):
+        batch_size = q.size(0)
+        query = self.w_q(q).view(batch_size, -1, self.num_heads, self.d_k).transpose(1, 2)
+        key = self.w_k(k).view(batch_size, -1, self.num_heads, self.d_k).transpose(1, 2)
+        value = self.w_v(v).view(batch_size, -1, self.num_heads, self.d_k).transpose(1, 2)
+
+        x, attn_weights = self.attention(query, key, value, mask=mask)
+        x = x.transpose(1, 2).contiguous().view(batch_size, -1, self.d_model)
+        return self.w_o(x), attn_weights
+```
+
+### Positional Embedding Layer (`modules/embeddings.py`)
+```python
+import math
+import torch
+import torch.nn as nn
+
+class TransformerEmbedding(nn.Module):
+    def __init__(self, vocab_size, d_model=512, max_len=5000, dropout=0.1):
+        super().__init__()
+        self.d_model = d_model
+        self.lut = nn.Embedding(vocab_size, d_model)
+        self.dropout = nn.Dropout(p=dropout)
+
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
+
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        self.register_buffer('pe', pe.unsqueeze(0))
+
+    def forward(self, x):
+        embeddings = self.lut(x) * math.sqrt(self.d_model)
+        x = embeddings + self.pe[:, :x.size(1)]
+        return self.dropout(x)
+```
+
+---
+
+## 📚 References & Citation
 
 ```bibtex
 @inproceedings{vaswani2017attention,
