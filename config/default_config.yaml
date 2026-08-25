@@ -1,0 +1,24 @@
+model:
+  d_model: 512
+  num_heads: 8
+  num_encoder_layers: 6
+  num_decoder_layers: 6
+  d_ff: 2048
+  dropout: 0.1
+  max_len: 5000
+  share_tgt_embeddings: true
+
+data:
+  vocab_size: 32000
+  max_len: 128
+  batch_size: 32
+  src_pad_idx: 0
+  tgt_pad_idx: 0
+
+training:
+  epochs: 30
+  warmup_steps: 4000
+  factor: 1.0
+  label_smoothing: 0.1
+  clip_grad: 1.0
+  save_dir: "checkpoints"
