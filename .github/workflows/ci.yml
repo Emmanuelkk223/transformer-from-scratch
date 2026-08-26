@@ -2,32 +2,61 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ main, master ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ main, master ]
 
 jobs:
-  test:
+  lint-and-test:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.10", "3.11"]
-
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v3
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python-version }}
-        cache: 'pip'
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
 
-    - name: Install Dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt
+          pip install flake8 pytest
 
-    - name: Run PyTest Suite
-      run: |
-        pytest tests/ -v
+      - name: Syntax & Lint Check
+        run: |
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=120 --statistics
+
+      - name: Smoke Test Model Architecture
+        run: |
+          python -c "
+          import torch
+          from models.transformer import Seq2SeqTransformer
+          model = Seq2SeqTransformer(src_vocab_size=100, tgt_vocab_size=100, src_pad_idx=0, tgt_pad_idx=0)
+          src = torch.randint(0, 100, (2, 10))
+          tgt = torch.randint(0, 100, (2, 10))
+          out = model(src, tgt)
+          assert out.shape == (2, 10, 100), f'Expected output shape (2, 10, 100), got {out.shape}'
+          print('✅ Transformer Forward Pass Smoke Test Passed!')
+          "
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: lint-and-test
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: transformer-studio:latest

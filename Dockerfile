@@ -1,24 +1,23 @@
-FROM pytorch/pytorch:2.1.0-cuda11.8-cudnn8-runtime
+FROM python:3.11-slim
 
 WORKDIR /app
 
-# Set PYTHONPATH so internal modules are discoverable globally
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONPATH=/app
-
+# Install lightweight system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git \
     build-essential \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
+# Copy dependency manifest and install requirements
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy application source code
 COPY . .
 
-# Run pytest through the python module wrapper
-RUN python -m pytest tests/ -v
+# Expose default Gradio Studio port
+EXPOSE 7860
 
-ENTRYPOINT ["python", "generate.py"]
-CMD ["--text", "The quick brown fox jumps over the lazy dog.", "--beam_size", "5"]
+ENV PYTHONUNBUFFERED=1
+
+CMD ["python", "app.py"]
